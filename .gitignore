@@ -1,0 +1,4 @@
+.data/
+.data_old_*/
+zeroclaw_backup_*.tar.gz
+tasks/
