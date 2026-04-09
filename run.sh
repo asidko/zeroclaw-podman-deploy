@@ -64,6 +64,7 @@ rebuild_image() {
     podman rmi -f "$IMAGE_NAME" 2>/dev/null || true
     echo "Building image from scratch..."
     podman build --no-cache -t "$IMAGE_NAME" -f "$DIR/Containerfile" "$DIR"
+    start_container
 }
 
 # ── Container Exec ─────────────────────────────────────────────────────────
@@ -272,7 +273,7 @@ case "${1:-start}" in
     stop)    stop_container ;;
     restart) stop_container; start_container ;;
     status)  status_container ;;
-    shell)   podman exec -it -u "$VM_USER" -w "/home/$VM_USER/.zeroclaw" "$CONTAINER_NAME" /bin/bash ;;
+    shell)   is_running || { echo "Container not running. Start it first."; exit 1; }; podman exec -it -u "$VM_USER" -w "/home/$VM_USER/.zeroclaw" "$CONTAINER_NAME" /bin/bash ;;
     destroy) destroy_container ;;
     rebuild) rebuild_image ;;
     update)  update_zeroclaw ;;

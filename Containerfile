@@ -53,6 +53,10 @@ RUN useradd -m -s /bin/bash -G sudo user \
     && echo "user:zeroclaw" | chpasswd \
     && echo "user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/user
 
+# sudo wrapper — auto-prepends sudo unless already present
+RUN echo '#!/bin/bash\n[[ "$*" == *sudo* ]] && exec "$@" || exec sudo "$@"' > /usr/local/bin/user_sudo.sh \
+    && chmod 755 /usr/local/bin/user_sudo.sh
+
 ENV PATH="/home/user/.local/bin:${PATH}"
 
 # uv (python package manager) - install system-wide since /home/user is a mounted volume

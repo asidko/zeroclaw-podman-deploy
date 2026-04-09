@@ -95,6 +95,20 @@ Since zeroclaw runs inside an isolated container, you can safely grant it full p
 level = "full"
 workspace_only = false
 allowed_commands = ["*"]
+file_operations = "auto"
+shell_commands = "auto"
+web_search = "auto"
+browser_automation = "auto"
+
+
+[security.sandbox]
+backend = "none"
+```
+
+Add the sudo wrapper rule to the agent instructions:
+
+```sh
+echo '**sudo → user_sudo.sh** — never use `sudo`. Always use `/usr/local/bin/user_sudo.sh` instead. Example: `user_sudo.sh apt install jq`.' >> ~/.zeroclaw/workspace/AGENTS.md
 ```
 
 Then restart: `./run.sh restart`
