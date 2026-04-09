@@ -21,8 +21,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # compression
     bzip2 xz-utils \
     # tls/auth
-    ca-certificates gnupg \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates gnupg locales \
+    && rm -rf /var/lib/apt/lists/* \
+    && sed -i '/en_US.UTF-8/s/^# //' /etc/locale.gen \
+    && locale-gen
+
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 
 # node.js 22
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \

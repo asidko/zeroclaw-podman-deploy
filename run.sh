@@ -272,7 +272,7 @@ case "${1:-start}" in
     stop)    stop_container ;;
     restart) stop_container; start_container ;;
     status)  status_container ;;
-    shell)   podman exec -it -u "$VM_USER" "$CONTAINER_NAME" /bin/bash ;;
+    shell)   podman exec -it -u "$VM_USER" -w "/home/$VM_USER/.zeroclaw" "$CONTAINER_NAME" /bin/bash ;;
     destroy) destroy_container ;;
     rebuild) rebuild_image ;;
     update)  update_zeroclaw ;;
