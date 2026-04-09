@@ -48,5 +48,7 @@ RUN useradd -m -s /bin/bash -G sudo user \
     && echo "user:zeroclaw" | chpasswd \
     && echo "user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/user
 
+ENV PATH="/home/user/.local/bin:${PATH}"
+
 # uv (python package manager) - install system-wide since /home/user is a mounted volume
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh

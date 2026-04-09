@@ -15,6 +15,7 @@
 #   ./run.sh stop           Stop container (preserves state and installed packages)
 #   ./run.sh restart        Stop + start
 #   ./run.sh status         Check if container is running
+#   ./run.sh shell          Open interactive shell inside container
 #   ./run.sh destroy        Remove container entirely (data in .data/ is kept)
 #   ./run.sh rebuild        Destroy container + rebuild image from scratch
 #   ./run.sh update         Update zeroclaw to latest version inside running container
@@ -26,7 +27,7 @@
 set -euo pipefail
 
 # ── Help (before preflight so it works without podman) ────────────────────
-case "${1:-}" in -h|--help|help) head -25 "$0" | tail -15; exit 0 ;; esac
+case "${1:-}" in -h|--help|help) head -26 "$0" | tail -16; exit 0 ;; esac
 
 # ── Preflight ─────────────────────────────────────────────────────────────
 command -v podman >/dev/null 2>&1 || { echo "Error: podman is not installed. Run: sudo apt install -y podman"; exit 1; }
@@ -271,6 +272,7 @@ case "${1:-start}" in
     stop)    stop_container ;;
     restart) stop_container; start_container ;;
     status)  status_container ;;
+    shell)   podman exec -it -u "$VM_USER" "$CONTAINER_NAME" /bin/bash ;;
     destroy) destroy_container ;;
     rebuild) rebuild_image ;;
     update)  update_zeroclaw ;;
@@ -278,5 +280,5 @@ case "${1:-start}" in
     backup)  backup_container ;;
     restore) shift; restore_container "${1:?Usage: $0 restore <backup_file>}" ;;
     setup)   setup_host ;;
-    *)       echo "Usage: $0 {start|stop|restart|status|destroy|rebuild|update|version|backup|restore|setup|help}"; exit 1 ;;
+    *)       echo "Usage: $0 {start|stop|restart|status|shell|destroy|rebuild|update|version|backup|restore|setup|help}"; exit 1 ;;
 esac

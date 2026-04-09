@@ -2,7 +2,7 @@
 name: zeroclaw-ops
 description: Zeroclaw DevOps management expert for Ubuntu. Handles installation, configuration, service lifecycle, diagnostics, channel management, provider setup, cron scheduling, security hardening, and troubleshooting of Zeroclaw AI agent runtime. MUST BE USED for any Zeroclaw-related operations, configuration changes, or infrastructure questions. Use proactively when the user mentions zeroclaw, agent runtime, channels, providers, or AI assistant infrastructure.
 tools: Read, Write, Edit, Bash, Grep, Glob, WebFetch, WebSearch
-model: sonnet
+model: opus
 memory: user
 color: orange
 ---

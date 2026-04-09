@@ -4,13 +4,13 @@
 
 [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw) is an open-source AI agent runtime. This repo deploys it with one script — a production-ready daemon running in an isolated Podman container with auto-restart, persistent storage, and zero root required.
 
-## Requirements
+## 📋 Requirements
 
 - **OS**: Linux (Debian/Ubuntu, Fedora/RHEL, Arch). WSL works.
 - **Podman**: v4.0+ (rootless mode)
 - **Disk**: ~2 GB for the container image
 
-## Quick Start
+## 🚀 Quick Start
 
 **1. Install Podman** (skip if already installed)
 
@@ -30,7 +30,7 @@ cd zeroclaw-podman-deploy
 **3. Run the onboarding wizard** (configures provider, API keys, and workspace)
 
 ```sh
-podman exec -it -u user zeroclaw /bin/bash   # ← enter the container
+./run.sh shell                                # ← enter the container
 zeroclaw onboard                              # ← interactive wizard: configures provider, API keys, and workspace
 exit                                          # ← back to host
 ```
@@ -49,13 +49,14 @@ exit                                          # ← back to host
 
 The daemon starts automatically after onboarding. On subsequent boots, it starts on its own.
 
-## Commands
+## 🛠 Commands
 
 ```
 ./run.sh start          Start container (creates on first run, resumes if stopped)
 ./run.sh stop           Stop container (preserves state)
 ./run.sh restart        Stop + start
 ./run.sh status         Check if container is running
+./run.sh shell          Alias for: podman exec -it -u user zeroclaw /bin/bash
 ./run.sh update         Update zeroclaw to latest version
 ./run.sh version        Show installed zeroclaw version
 ./run.sh backup         Export container + data to timestamped .tar.gz
@@ -65,7 +66,7 @@ The daemon starts automatically after onboarding. On subsequent boots, it starts
 ./run.sh setup          Enable auto-restart after host reboot
 ```
 
-## Logs
+## 📝 Logs
 
 Zeroclaw logs are available in `.data/home/.zeroclaw/` on the host (bind-mounted from the container):
 
@@ -75,20 +76,38 @@ podman unshare cat .data/home/.zeroclaw/audit.log
 
 # or check daemon output directly
 podman logs zeroclaw
-podman logs -f zeroclaw        # follow
-podman logs --tail 50 zeroclaw # last 50 lines
+podman logs -f --tail 50 zeroclaw   # follow last 50 lines
 ```
 
-## How It Works
+## ⚙️ How It Works
 
-- **Single script**: `run.sh` manages the full container lifecycle, `Containerfile` defines the image
-- **Persistent home**: `/home/user` is mounted to `.data/home/` — survives stop/start and destroy/rebuild
-- **Auto-restart**: `zeroclaw daemon` restarts with exponential backoff (1s to 60s, resets after healthy run); container restarts via `--restart=always`
-- **Network isolated**: `slirp4netns` with host loopback disabled — container cannot reach host services
-- **Rootless**: runs entirely without root via Podman user namespaces
-- **Gateway port**: `42617` (default, inside container)
+- `run.sh` manages everything, `Containerfile` defines the image
+- Your data lives in `.data/home/` and survives restarts, destroys, and rebuilds
+- If zeroclaw crashes, it auto-restarts. If the host reboots, the container auto-starts
+- Runs without root via Podman rootless mode
 
-## Backup & Restore
+## 🔓 Autonomy
+
+Since zeroclaw runs inside an isolated container, you can safely grant it full permissions. Replace the entire `[autonomy]` section in `~/.zeroclaw/config.toml` inside the container with:
+
+```toml
+[autonomy]
+level = "full"
+workspace_only = false
+allowed_commands = ["*"]
+```
+
+Then restart: `./run.sh restart`
+
+## 💬 Messengers
+
+Telegram, Discord, Slack, and other channels can be configured with:
+
+```sh
+podman exec -it -u user zeroclaw zeroclaw onboard --channels-only
+```
+
+## 💾 Backup & Restore
 
 ```sh
 ./run.sh backup
@@ -100,6 +119,6 @@ podman logs --tail 50 zeroclaw # last 50 lines
 
 Backups include the full container filesystem and user data, preserving any custom packages or modifications made inside the container.
 
-## Pre-installed Tools
+## 🧰 Pre-installed Tools
 
 Python 3, Node.js 22, git, uv, gh, ripgrep, fd, fzf, jq, yq, tmux, sqlite3, build-essential, and more. Full list in `Containerfile`.
