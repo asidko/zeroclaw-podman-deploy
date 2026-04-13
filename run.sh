@@ -67,7 +67,7 @@ rebuild_image() {
     destroy_container
     podman rmi -f "$IMAGE_NAME" 2>/dev/null || true
     echo "Building image from scratch..."
-    podman build --no-cache -t "$IMAGE_NAME" -f "$DIR/Containerfile" "$DIR"
+    podman build -t "$IMAGE_NAME" -f "$DIR/Containerfile" "$DIR"
     start_container
 }
 
