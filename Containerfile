@@ -59,6 +59,13 @@ RUN useradd -m -s /bin/bash -G sudo user \
 RUN echo '#!/bin/bash\n[[ "$*" == *sudo* ]] && exec "$@" || exec sudo "$@"' > /usr/local/bin/user_sudo.sh \
     && chmod 755 /usr/local/bin/user_sudo.sh
 
+# stable zeroclaw command path
+RUN printf '%s\n' \
+        '#!/bin/sh' \
+        'exec /home/user/.cargo/bin/zeroclaw "$@"' \
+        > /usr/local/bin/zeroclaw \
+    && chmod 755 /usr/local/bin/zeroclaw
+
 # ssh server
 RUN mkdir -p /run/sshd /home/user/.ssh \
     && chown -R user:user /home/user/.ssh \
@@ -77,7 +84,6 @@ RUN mkdir -p /run/sshd /home/user/.ssh \
         'AllowUsers user' \
         > /etc/ssh/sshd_config.d/zeroclaw.conf
 
-ENV PATH="/home/user/.local/bin:${PATH}"
 
 # uv (python package manager) - install system-wide since /home/user is a mounted volume
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh

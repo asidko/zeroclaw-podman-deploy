@@ -21,7 +21,7 @@ start_sshd
 
 while true; do
     START=$(date +%s)
-    su - user -c "export PATH=/home/user/.local/bin:\$PATH; zeroclaw daemon" &
+    su - user -c "mkdir -p /home/user/.zeroclaw; zeroclaw daemon" &
     CHILD_PID=$!
     wait "$CHILD_PID"
     EXIT_CODE=$?

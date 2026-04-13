@@ -45,6 +45,7 @@ IMAGE_NAME="zeroclaw-ubuntu"
 DATA_DIR="$DIR/.data"
 USER_HOME_DIR="$DATA_DIR/zeroclaw-user-home"
 VM_USER="user"
+ZEROCLAW_USER_BIN="/home/$VM_USER/.cargo/bin/zeroclaw"
 GATEWAY_PORT="${GATEWAY_PORT:-}"
 SSH_PORT="${SSH_PORT:-2222}"
 
@@ -111,11 +112,14 @@ init_home_dir() {
         echo "Initializing home directory..."
         vm_exec sh -c "cp /etc/skel/.bashrc /etc/skel/.profile /etc/skel/.bash_logout ~ 2>/dev/null || true"
     fi
-    if ! vm_exec grep -q '.local/bin' "/home/$VM_USER/.bashrc" 2>/dev/null; then
-        vm_exec sh -c 'echo "export PATH=\$HOME/.local/bin:\$PATH" >> ~/.bashrc'
+    if ! vm_exec grep -q '/home/user/.cargo/bin' "/home/$VM_USER/.bashrc" 2>/dev/null; then
+        vm_exec sh -c 'printf "%s\n" '"'"'export PATH="/home/user/.cargo/bin:$PATH"'"'"' >> ~/.bashrc'
     fi
-    vm_exec sh -c 'mkdir -p ~/.ssh && chmod 700 ~/.ssh'
-    if ! vm_exec test -x "/home/$VM_USER/.local/bin/zeroclaw"; then
+    if ! vm_exec grep -q '/home/user/.cargo/bin' "/home/$VM_USER/.profile" 2>/dev/null; then
+        vm_exec sh -c 'printf "%s\n" '"'"'export PATH="/home/user/.cargo/bin:$PATH"'"'"' >> ~/.profile'
+    fi
+    vm_exec sh -c 'mkdir -p ~/.ssh ~/.zeroclaw && chmod 700 ~/.ssh'
+    if ! vm_exec test -x "$ZEROCLAW_USER_BIN"; then
         install_zeroclaw
     fi
 }
@@ -132,7 +136,7 @@ run_zeroclaw_installer() {
         git clone --depth=1 https://github.com/zeroclaw-labs/zeroclaw.git "$tmp_dir"
         cd "$tmp_dir"
         ./install.sh --skip-onboard
-        zeroclaw --version 2>/dev/null || echo "Installed"
+        /usr/local/bin/zeroclaw --version 2>/dev/null || echo "Installed"
     '
 }
 
@@ -247,7 +251,7 @@ upgrade_zeroclaw() {
 
 show_version() {
     is_running || { echo "Container not running. Start it first."; return 1; }
-    vm_exec sh -c 'PATH=~/.local/bin:$PATH zeroclaw --version 2>/dev/null || echo "unknown"'
+    vm_exec sh -c 'zeroclaw --version 2>/dev/null || echo "unknown"'
 }
 
 backup_container() {
@@ -324,5 +328,5 @@ case "${1:-start}" in
     backup)  backup_container ;;
     restore) shift; restore_container "${1:?Usage: $0 restore <backup_file>}" ;;
     setup)   setup_host ;;
-    *)       echo "Usage: $0 {start|stop|restart|status|shell|destroy|rebuild|update|version|backup|restore|setup|help}"; exit 1 ;;
+    *)       echo "Usage: $0 {start|stop|restart|status|shell|destroy|rebuild|update|upgrade|version|backup|restore|setup|help}"; exit 1 ;;
 esac
