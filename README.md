@@ -29,14 +29,17 @@ cd zeroclaw-podman-deploy
 
 **3. On first start, ZeroClaw is installed from the official repository**
 
-Inside the container, the deploy script uses this setup flow:
+Inside the container, the deploy script downloads and unpacks the latest release tarball:
 
 ```sh
-rm -rf /tmp/zeroclaw-install
-git clone --depth=1 https://github.com/zeroclaw-labs/zeroclaw.git /tmp/zeroclaw-install
+rm -rf /tmp/zeroclaw-install /tmp/zeroclaw-release.tar.gz
+archive_url=$(curl -fsSL https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases/latest | jq -r .tarball_url)
+curl -fsSL "$archive_url" -o /tmp/zeroclaw-release.tar.gz
+mkdir -p /tmp/zeroclaw-install
+tar -xzf /tmp/zeroclaw-release.tar.gz -C /tmp/zeroclaw-install --strip-components=1
 cd /tmp/zeroclaw-install
 ./install.sh --skip-onboard
-rm -rf /tmp/zeroclaw-install
+rm -rf /tmp/zeroclaw-install /tmp/zeroclaw-release.tar.gz
 ```
 
 Then run onboarding:
@@ -69,8 +72,8 @@ The daemon starts automatically after onboarding. On subsequent boots, it starts
 ./run.sh restart        Stop + start
 ./run.sh status         Check if container is running
 ./run.sh shell          Alias for: podman exec -it -u user zeroclaw /bin/bash
-./run.sh update         Reinstall zeroclaw from a fresh official git checkout
-./run.sh upgrade        Fresh shallow-clone upgrade from the official git repo
+./run.sh update         Reinstall zeroclaw from the latest official release tarball
+./run.sh upgrade        Upgrade zeroclaw from the latest official release tarball
 ./run.sh version        Show installed zeroclaw version
 ./run.sh backup         Export container + data to timestamped .tar.gz
 ./run.sh restore <file> Restore from backup archive
@@ -169,24 +172,30 @@ podman exec -it -u user zeroclaw zeroclaw onboard --channels-only
 
 Backups include the full container filesystem and user data, preserving any custom packages or modifications made inside the container.
 
-The `update` command uses the official repository install flow inside the container:
+The `update` command uses the latest official release tarball inside the container:
 
 ```sh
-rm -rf /tmp/zeroclaw-install
-git clone --depth=1 https://github.com/zeroclaw-labs/zeroclaw.git /tmp/zeroclaw-install
+rm -rf /tmp/zeroclaw-install /tmp/zeroclaw-release.tar.gz
+archive_url=$(curl -fsSL https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases/latest | jq -r .tarball_url)
+curl -fsSL "$archive_url" -o /tmp/zeroclaw-release.tar.gz
+mkdir -p /tmp/zeroclaw-install
+tar -xzf /tmp/zeroclaw-release.tar.gz -C /tmp/zeroclaw-install --strip-components=1
 cd /tmp/zeroclaw-install
 ./install.sh --skip-onboard
-rm -rf /tmp/zeroclaw-install
+rm -rf /tmp/zeroclaw-install /tmp/zeroclaw-release.tar.gz
 ```
 
-The `upgrade` command also uses a fresh shallow clone in `/tmp` to avoid stale checkout state:
+The `upgrade` command uses the same latest-release tarball flow, avoiding stale checkout state entirely:
 
 ```sh
-rm -rf /tmp/zeroclaw-install
-git clone --depth=1 https://github.com/zeroclaw-labs/zeroclaw.git /tmp/zeroclaw-install
+rm -rf /tmp/zeroclaw-install /tmp/zeroclaw-release.tar.gz
+archive_url=$(curl -fsSL https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases/latest | jq -r .tarball_url)
+curl -fsSL "$archive_url" -o /tmp/zeroclaw-release.tar.gz
+mkdir -p /tmp/zeroclaw-install
+tar -xzf /tmp/zeroclaw-release.tar.gz -C /tmp/zeroclaw-install --strip-components=1
 cd /tmp/zeroclaw-install
 ./install.sh --skip-onboard
-rm -rf /tmp/zeroclaw-install
+rm -rf /tmp/zeroclaw-install /tmp/zeroclaw-release.tar.gz
 ```
 
 ## 🧰 Pre-installed Tools

@@ -130,10 +130,16 @@ run_zeroclaw_installer() {
     vm_exec sh -lc '
         set -e
         tmp_dir=/tmp/zeroclaw-install
-        cleanup() { rm -rf "$tmp_dir"; }
+        archive=/tmp/zeroclaw-release.tar.gz
+        api_url=https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases/latest
+        cleanup() { rm -rf "$tmp_dir" "$archive"; }
         trap cleanup EXIT
-        rm -rf "$tmp_dir"
-        git clone --depth=1 https://github.com/zeroclaw-labs/zeroclaw.git "$tmp_dir"
+        cleanup
+        archive_url=$(curl -fsSL "$api_url" | jq -r .tarball_url)
+        [ -n "$archive_url" ] && [ "$archive_url" != "null" ]
+        curl -fsSL "$archive_url" -o "$archive"
+        mkdir -p "$tmp_dir"
+        tar -xzf "$archive" -C "$tmp_dir" --strip-components=1
         cd "$tmp_dir"
         ./install.sh --skip-onboard
         /usr/local/bin/zeroclaw --version 2>/dev/null || echo "Installed"
