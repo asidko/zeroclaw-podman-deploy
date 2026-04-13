@@ -13,11 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ripgrep fd-find tree fzf \
     # networking
     net-tools dnsutils iputils-ping netcat-openbsd openssl \
-    openssh-client rsync \
+    openssh-client openssh-server rsync \
     # databases
     sqlite3 \
     # process debugging
     lsof psmisc \
+    # media
+    ffmpeg \
     # compression
     bzip2 xz-utils \
     # tls/auth
@@ -56,6 +58,24 @@ RUN useradd -m -s /bin/bash -G sudo user \
 # sudo wrapper — auto-prepends sudo unless already present
 RUN echo '#!/bin/bash\n[[ "$*" == *sudo* ]] && exec "$@" || exec sudo "$@"' > /usr/local/bin/user_sudo.sh \
     && chmod 755 /usr/local/bin/user_sudo.sh
+
+# ssh server
+RUN mkdir -p /run/sshd /home/user/.ssh \
+    && chown -R user:user /home/user/.ssh \
+    && chmod 700 /home/user/.ssh \
+    && printf '%s\n' \
+        'Port 2222' \
+        'ListenAddress 0.0.0.0' \
+        'PermitRootLogin no' \
+        'PasswordAuthentication yes' \
+        'PubkeyAuthentication yes' \
+        'KbdInteractiveAuthentication no' \
+        'UsePAM no' \
+        'X11Forwarding no' \
+        'AllowTcpForwarding yes' \
+        'GatewayPorts no' \
+        'AllowUsers user' \
+        > /etc/ssh/sshd_config.d/zeroclaw.conf
 
 ENV PATH="/home/user/.local/bin:${PATH}"
 

@@ -18,7 +18,8 @@
 #   ./run.sh shell          Open interactive shell inside container
 #   ./run.sh destroy        Remove container entirely (data in .data/ is kept)
 #   ./run.sh rebuild        Destroy container + rebuild image from scratch
-#   ./run.sh update         Update zeroclaw to latest version inside running container
+#   ./run.sh update         Reinstall zeroclaw from a fresh official git checkout inside running container
+#   ./run.sh upgrade        Fresh shallow-clone upgrade from the official git repo
 #   ./run.sh version        Show installed zeroclaw version
 #   ./run.sh backup         Export container + data into a timestamped .tar.gz
 #   ./run.sh restore <file> Restore container + data from a backup archive
@@ -42,8 +43,10 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 CONTAINER_NAME="zeroclaw"
 IMAGE_NAME="zeroclaw-ubuntu"
 DATA_DIR="$DIR/.data"
+USER_HOME_DIR="$DATA_DIR/zeroclaw-user-home"
 VM_USER="user"
 GATEWAY_PORT="${GATEWAY_PORT:-}"
+SSH_PORT="${SSH_PORT:-2222}"
 
 # ── Image Management ───────────────────────────────────────────────────────
 image_exists() {
@@ -75,10 +78,29 @@ vm_exec() {
 wait_for_ready() {
     echo "Waiting for container..."
     for _ in $(seq 1 15); do
-        podman exec "$CONTAINER_NAME" true 2>/dev/null && echo "Container is up." && return 0
+        if podman exec "$CONTAINER_NAME" true 2>/dev/null \
+            && podman exec "$CONTAINER_NAME" sh -c 'pgrep -x sshd >/dev/null' 2>/dev/null; then
+            echo "Container is up."
+            return 0
+        fi
         sleep 1
     done
     echo "Warning: container not ready after 15 seconds."
+    return 1
+}
+
+wait_for_ssh_port() {
+    echo "Waiting for SSH on port $SSH_PORT..."
+    for _ in $(seq 1 20); do
+        if (exec 3<>"/dev/tcp/127.0.0.1/$SSH_PORT") 2>/dev/null; then
+            exec 3<&-
+            exec 3>&-
+            echo "SSH is reachable."
+            return 0
+        fi
+        sleep 1
+    done
+    echo "Warning: SSH port $SSH_PORT is not reachable yet."
     return 1
 }
 
@@ -92,30 +114,34 @@ init_home_dir() {
     if ! vm_exec grep -q '.local/bin' "/home/$VM_USER/.bashrc" 2>/dev/null; then
         vm_exec sh -c 'echo "export PATH=\$HOME/.local/bin:\$PATH" >> ~/.bashrc'
     fi
+    vm_exec sh -c 'mkdir -p ~/.ssh && chmod 700 ~/.ssh'
     if ! vm_exec test -x "/home/$VM_USER/.local/bin/zeroclaw"; then
         install_zeroclaw
     fi
 }
 
-install_zeroclaw() {
-    echo "Installing zeroclaw..."
-    vm_exec sh -c '
+run_zeroclaw_installer() {
+    local action="$1"
+    echo "${action} zeroclaw..."
+    vm_exec sh -lc '
         set -e
-        ARCH=$(uname -m)
-        case "$ARCH" in
-            x86_64)  ARCH="x86_64-unknown-linux-gnu" ;;
-            aarch64) ARCH="aarch64-unknown-linux-gnu" ;;
-            *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
-        esac
-        mkdir -p ~/.local/bin
-        TMP=$(mktemp -d)
-        curl -fsSL "https://github.com/zeroclaw-labs/zeroclaw/releases/latest/download/zeroclaw-${ARCH}.tar.gz" -o "$TMP/zeroclaw.tar.gz"
-        tar xzf "$TMP/zeroclaw.tar.gz" -C "$TMP"
-        find "$TMP" -name zeroclaw -type f -exec cp {} ~/.local/bin/zeroclaw \;
-        chmod +x ~/.local/bin/zeroclaw
-        rm -rf "$TMP"
-        echo "Installed: $(~/.local/bin/zeroclaw --version 2>/dev/null || echo "ok")"
+        tmp_dir=/tmp/zeroclaw-install
+        cleanup() { rm -rf "$tmp_dir"; }
+        trap cleanup EXIT
+        rm -rf "$tmp_dir"
+        git clone --depth=1 https://github.com/zeroclaw-labs/zeroclaw.git "$tmp_dir"
+        cd "$tmp_dir"
+        ./install.sh --skip-onboard
+        zeroclaw --version 2>/dev/null || echo "Installed"
     '
+}
+
+install_zeroclaw() {
+    run_zeroclaw_installer "Installing"
+}
+
+upgrade_zeroclaw_checkout() {
+    run_zeroclaw_installer "Upgrading"
 }
 
 # ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -136,9 +162,10 @@ create_container() {
         --restart=always
         --init
         --network=slirp4netns:allow_host_loopback=false
-        -v "$DATA_DIR/home:/home/$VM_USER:Z"
+        -v "$USER_HOME_DIR:/home/$VM_USER:Z"
         -v "$DIR/entrypoint.sh:/usr/local/bin/entrypoint.sh:Z,ro"
         --log-opt max-size=10m
+        -p "127.0.0.1:${SSH_PORT}:2222"
     )
     if [ -n "$GATEWAY_PORT" ]; then
         run_args+=(-p "${GATEWAY_PORT}:${GATEWAY_PORT}")
@@ -156,15 +183,18 @@ start_container() {
         echo "Resuming stopped container..."
         podman start "$CONTAINER_NAME"
         wait_for_ready
+        wait_for_ssh_port
+        init_home_dir
         return 0
     fi
 
     build_image
-    mkdir -p "$DATA_DIR/home"
+    mkdir -p "$USER_HOME_DIR"
     echo "Creating container..."
     create_container "$IMAGE_NAME"
 
     if wait_for_ready; then
+        wait_for_ssh_port
         init_home_dir
     fi
 }
@@ -203,6 +233,16 @@ update_zeroclaw() {
     echo "Restarting container to apply update..."
     podman restart "$CONTAINER_NAME"
     wait_for_ready
+    wait_for_ssh_port
+}
+
+upgrade_zeroclaw() {
+    is_running || { echo "Container not running. Start it first."; return 1; }
+    upgrade_zeroclaw_checkout
+    echo "Restarting container to apply upgrade..."
+    podman restart "$CONTAINER_NAME"
+    wait_for_ready
+    wait_for_ssh_port
 }
 
 show_version() {
@@ -255,6 +295,8 @@ restore_container() {
     create_container "$img"
     rm -rf "$tmp"
     wait_for_ready
+    init_home_dir
+    wait_for_ssh_port
     echo "Restore complete. Old container/data saved with _old_${ts} suffix."
 }
 
@@ -277,6 +319,7 @@ case "${1:-start}" in
     destroy) destroy_container ;;
     rebuild) rebuild_image ;;
     update)  update_zeroclaw ;;
+    upgrade) upgrade_zeroclaw ;;
     version) show_version ;;
     backup)  backup_container ;;
     restore) shift; restore_container "${1:?Usage: $0 restore <backup_file>}" ;;

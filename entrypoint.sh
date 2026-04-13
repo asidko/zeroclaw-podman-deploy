@@ -5,11 +5,19 @@ MAX_BACKOFF=60
 HEALTHY_THRESHOLD=60
 CHILD_PID=
 
+start_sshd() {
+    mkdir -p /run/sshd
+    ssh-keygen -A >/dev/null 2>&1
+    /usr/sbin/sshd
+}
+
 cleanup() {
     [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null
     exit 0
 }
 trap cleanup TERM INT
+
+start_sshd
 
 while true; do
     START=$(date +%s)
