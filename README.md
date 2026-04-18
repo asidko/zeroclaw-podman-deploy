@@ -4,6 +4,15 @@
 
 [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw) is an open-source AI agent runtime. This repo deploys it with one script — a production-ready daemon running in an isolated Podman container with auto-restart, persistent storage, and zero root required.
 
+## 🤔 Why a container?
+
+You could install ZeroClaw on your host. A container gives you:
+
+- **Blast radius = the container.** Agent runs with `autonomy = full`, `sandbox = none`. If it misbehaves it can't touch your home, keys, or system.
+- **Same environment everywhere.** Ubuntu 24.04 + known toolchain, identical on macOS, Linux, or WSL.
+- **Clean install/uninstall, one-command backup.** No host dotfiles or systemd leftovers; `./run.sh backup` → single tarball.
+- **Network-isolated by default.** Host loopback blocked; opt in with `GATEWAY_PORT`.
+
 ## 📋 Requirements
 
 - **OS**: Linux (Debian/Ubuntu, Fedora/RHEL, Arch). WSL works.
@@ -27,22 +36,9 @@ cd zeroclaw-podman-deploy
 ./run.sh start    # ← builds image and starts container on first run
 ```
 
-**3. On first start, ZeroClaw is installed from the official repository**
+**3. Run onboarding** (first time only)
 
-Inside the container, the deploy script downloads and unpacks the latest release tarball:
-
-```sh
-rm -rf /tmp/zeroclaw-install /tmp/zeroclaw-release.tar.gz
-archive_url=$(curl -fsSL https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases/latest | jq -r .tarball_url)
-curl -fsSL "$archive_url" -o /tmp/zeroclaw-release.tar.gz
-mkdir -p /tmp/zeroclaw-install
-tar -xzf /tmp/zeroclaw-release.tar.gz -C /tmp/zeroclaw-install --strip-components=1
-cd /tmp/zeroclaw-install
-./install.sh --skip-onboard
-rm -rf /tmp/zeroclaw-install /tmp/zeroclaw-release.tar.gz
-```
-
-Then run onboarding:
+ZeroClaw is installed automatically on first start. Then configure it:
 
 ```sh
 ./run.sh shell                                # ← enter the container
@@ -72,8 +68,7 @@ The daemon starts automatically after onboarding. On subsequent boots, it starts
 ./run.sh restart        Stop + start
 ./run.sh status         Check if container is running
 ./run.sh shell          Alias for: podman exec -it -u user zeroclaw /bin/bash
-./run.sh update         Reinstall zeroclaw from the latest official release tarball
-./run.sh upgrade        Upgrade zeroclaw from the latest official release tarball
+./run.sh update [--beta]  Update zeroclaw (stable by default; --beta includes prereleases)
 ./run.sh version        Show installed zeroclaw version
 ./run.sh backup         Export container + data to timestamped .tar.gz
 ./run.sh restore <file> Restore from backup archive
@@ -171,32 +166,6 @@ podman exec -it -u user zeroclaw zeroclaw onboard --channels-only
 ```
 
 Backups include the full container filesystem and user data, preserving any custom packages or modifications made inside the container.
-
-The `update` command uses the latest official release tarball inside the container:
-
-```sh
-rm -rf /tmp/zeroclaw-install /tmp/zeroclaw-release.tar.gz
-archive_url=$(curl -fsSL https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases/latest | jq -r .tarball_url)
-curl -fsSL "$archive_url" -o /tmp/zeroclaw-release.tar.gz
-mkdir -p /tmp/zeroclaw-install
-tar -xzf /tmp/zeroclaw-release.tar.gz -C /tmp/zeroclaw-install --strip-components=1
-cd /tmp/zeroclaw-install
-./install.sh --skip-onboard
-rm -rf /tmp/zeroclaw-install /tmp/zeroclaw-release.tar.gz
-```
-
-The `upgrade` command uses the same latest-release tarball flow, avoiding stale checkout state entirely:
-
-```sh
-rm -rf /tmp/zeroclaw-install /tmp/zeroclaw-release.tar.gz
-archive_url=$(curl -fsSL https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases/latest | jq -r .tarball_url)
-curl -fsSL "$archive_url" -o /tmp/zeroclaw-release.tar.gz
-mkdir -p /tmp/zeroclaw-install
-tar -xzf /tmp/zeroclaw-release.tar.gz -C /tmp/zeroclaw-install --strip-components=1
-cd /tmp/zeroclaw-install
-./install.sh --skip-onboard
-rm -rf /tmp/zeroclaw-install /tmp/zeroclaw-release.tar.gz
-```
 
 ## 🧰 Pre-installed Tools
 

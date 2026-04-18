@@ -1,5 +1,11 @@
 .data/
 .data_old_*/
+.git/
+.github/
+.claude/
 zeroclaw_backup_*.tar.gz
 tasks/
 .DS_Store
+README.md
+LICENSE
+CLAUDE.md

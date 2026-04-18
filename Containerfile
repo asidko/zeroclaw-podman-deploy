@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # core tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl wget git htop tmux vim nano jq unzip zip file sudo direnv \
+    curl wget git htop tmux vim nano jq unzip zip file sudo direnv bat \
     # build toolchain
     build-essential \
     # python
@@ -41,8 +41,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
         | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
         > /etc/apt/sources.list.d/github-cli.list \
-    && apt-get update && apt-get install -y gh \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get update && apt-get install -y gh
 
 # yq
 RUN ARCH=$(dpkg --print-architecture) \
@@ -56,7 +55,10 @@ RUN useradd -m -s /bin/bash -G sudo user \
     && echo "user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/user
 
 # sudo wrapper — auto-prepends sudo unless already present
-RUN echo '#!/bin/bash\n[[ "$*" == *sudo* ]] && exec "$@" || exec sudo "$@"' > /usr/local/bin/user_sudo.sh \
+RUN printf '%s\n' \
+        '#!/bin/bash' \
+        '[[ "$*" == *sudo* ]] && exec "$@" || exec sudo "$@"' \
+        > /usr/local/bin/user_sudo.sh \
     && chmod 755 /usr/local/bin/user_sudo.sh
 
 # stable zeroclaw command path

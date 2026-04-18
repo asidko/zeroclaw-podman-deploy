@@ -12,16 +12,23 @@ start_sshd() {
 }
 
 cleanup() {
+    signum=$1
     [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null
-    exit 0
+    [ -n "$CHILD_PID" ] && wait "$CHILD_PID" 2>/dev/null
+    exit $((128 + signum))
 }
-trap cleanup TERM INT
+trap 'cleanup 15' TERM
+trap 'cleanup 2'  INT
+trap 'cleanup 1'  HUP
+trap 'cleanup 3'  QUIT
 
 start_sshd
+mkdir -p /home/user/.zeroclaw
 
 while true; do
+    pgrep -x sshd >/dev/null 2>&1 || start_sshd
     START=$(date +%s)
-    su - user -c "mkdir -p /home/user/.zeroclaw; zeroclaw daemon" &
+    su - user -c "export SHELL=/bin/bash; zeroclaw daemon" &
     CHILD_PID=$!
     wait "$CHILD_PID"
     EXIT_CODE=$?

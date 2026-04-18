@@ -7,11 +7,11 @@ Self-hosted deployment of [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw) 
 - `run.sh` — lifecycle manager (start/stop/rebuild/backup/restore/update)
 - `entrypoint.sh` — PID supervisor inside the container, runs `zeroclaw daemon` via `su - user` with exponential backoff. Uses background `wait` pattern so SIGTERM trap fires immediately
 - `Containerfile` — static, committed (not generated). Ubuntu 24.04 + dev tools + Node.js 22
-- `.data/home/` — bind-mounted persistent volume for `/home/user` inside container. Contains zeroclaw binary at `.local/bin/zeroclaw` and config at `.zeroclaw/config.toml`
+- `.data/zeroclaw-user-home/` — bind-mounted persistent volume for `/home/user` inside container. Contains zeroclaw binary at `.cargo/bin/zeroclaw` and config at `.zeroclaw/config.toml`
 
 ## Key decisions
 - ZeroClaw is a **Rust binary** installed from GitHub releases, NOT npm. The `zeroclaw` npm package is an unrelated TS SDK from clawrun.sh
-- Binary lives on the bind-mount (`~/.local/bin/`) so it survives `destroy`+`start`. Image rebuild doesn't lose it
+- Binary lives on the bind-mount (`~/.cargo/bin/`) so it survives `destroy`+`start`. Image rebuild doesn't lose it. A stable shim at `/usr/local/bin/zeroclaw` (built into the image) forwards to it
 - `zeroclaw daemon` is the full runtime (gateway + channels + cron). Gateway alone is `zeroclaw gateway` (port 42617)
 - `zeroclaw onboard` is the interactive setup wizard (provider, API keys, workspace)
 - Container networking: `slirp4netns:allow_host_loopback=false`. No ports published by default. `GATEWAY_PORT` env var adds `-p` flag
@@ -25,7 +25,7 @@ Self-hosted deployment of [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw) 
 - Zeroclaw runs inside a podman container named `zeroclaw` on the user's machine
 - For deployment/lifecycle tasks (start, stop, rebuild, backup): use `run.sh`
 - For zeroclaw runtime tasks (config, providers, channels, onboard, diagnostics): `podman exec -it -u user zeroclaw /bin/bash` then run zeroclaw CLI commands inside the container
-- Config file inside container: `~/.zeroclaw/config.toml`. From host: `.data/home/.zeroclaw/config.toml` (requires `podman unshare` for access)
+- Config file inside container: `~/.zeroclaw/config.toml`. From host: `.data/zeroclaw-user-home/.zeroclaw/config.toml` (requires `podman unshare` for access)
 
 ## Shell conventions
 - All shell scripts must pass `shellcheck` at warning severity (CI enforced)

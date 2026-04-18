@@ -18,8 +18,7 @@
 #   ./run.sh shell          Open interactive shell inside container
 #   ./run.sh destroy        Remove container entirely (data in .data/ is kept)
 #   ./run.sh rebuild        Destroy container + rebuild image from scratch
-#   ./run.sh update         Reinstall zeroclaw from a fresh official git checkout inside running container
-#   ./run.sh upgrade        Fresh shallow-clone upgrade from the official git repo
+#   ./run.sh update [--beta]  Update zeroclaw (stable by default; --beta includes prereleases)
 #   ./run.sh version        Show installed zeroclaw version
 #   ./run.sh backup         Export container + data into a timestamped .tar.gz
 #   ./run.sh restore <file> Restore container + data from a backup archive
@@ -28,7 +27,7 @@
 set -euo pipefail
 
 # ── Help (before preflight so it works without podman) ────────────────────
-case "${1:-}" in -h|--help|help) head -26 "$0" | tail -16; exit 0 ;; esac
+case "${1:-}" in -h|--help|help) head -25 "$0" | tail -15; exit 0 ;; esac
 
 # ── Preflight ─────────────────────────────────────────────────────────────
 command -v podman >/dev/null 2>&1 || { echo "Error: podman is not installed. Run: sudo apt install -y podman"; exit 1; }
@@ -126,20 +125,29 @@ init_home_dir() {
 
 run_zeroclaw_installer() {
     local action="$1"
-    echo "${action} zeroclaw..."
+    local channel="${2:-stable}"
+    local api_url jq_filter
+    case "$channel" in
+        stable) api_url="https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases/latest"
+                jq_filter=".tarball_url" ;;
+        beta)   api_url="https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases"
+                jq_filter="[.[] | select(.draft==false)][0].tarball_url" ;;
+        *)      echo "Unknown channel: $channel (expected: stable|beta)"; return 1 ;;
+    esac
+    echo "${action} zeroclaw (channel: ${channel})..."
     vm_exec sh -lc '
         set -e
         tmp_dir=/tmp/zeroclaw-install
         archive=/tmp/zeroclaw-release.tar.gz
-        api_url=https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases/latest
         cleanup() { rm -rf "$tmp_dir" "$archive"; }
         trap cleanup EXIT
         cleanup
-        archive_url=$(curl -fsSL "$api_url" | jq -r .tarball_url)
-        [ -n "$archive_url" ] && [ "$archive_url" != "null" ]
+        archive_url=$(curl -fsSL "'"$api_url"'" | jq -r '"'$jq_filter'"')
+        [ -n "$archive_url" ] && [ "$archive_url" != "null" ] \
+            || { echo "Could not resolve release tarball URL"; exit 1; }
         curl -fsSL "$archive_url" -o "$archive"
         mkdir -p "$tmp_dir"
-        tar -xzf "$archive" -C "$tmp_dir" --strip-components=1
+        tar -xzf "$archive" -C "$tmp_dir" --strip-components=1 --no-same-owner
         cd "$tmp_dir"
         ./install.sh --skip-onboard
         /usr/local/bin/zeroclaw --version 2>/dev/null || echo "Installed"
@@ -147,11 +155,7 @@ run_zeroclaw_installer() {
 }
 
 install_zeroclaw() {
-    run_zeroclaw_installer "Installing"
-}
-
-upgrade_zeroclaw_checkout() {
-    run_zeroclaw_installer "Upgrading"
+    run_zeroclaw_installer "Installing" "stable"
 }
 
 # ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -238,18 +242,25 @@ status_container() {
 }
 
 update_zeroclaw() {
+    local channel="stable"
+    case "${1:-}" in
+        --beta) channel="beta" ;;
+        "") ;;
+        *) echo "Unknown flag: $1 (expected: --beta)"; return 1 ;;
+    esac
     is_running || { echo "Container not running. Start it first."; return 1; }
-    install_zeroclaw
-    echo "Restarting container to apply update..."
-    podman restart "$CONTAINER_NAME"
-    wait_for_ready
-    wait_for_ssh_port
-}
-
-upgrade_zeroclaw() {
-    is_running || { echo "Container not running. Start it first."; return 1; }
-    upgrade_zeroclaw_checkout
-    echo "Restarting container to apply upgrade..."
+    local old_ver new_ver
+    old_ver=$(vm_exec sh -c 'zeroclaw --version 2>/dev/null' || echo "unknown")
+    if ! run_zeroclaw_installer "Updating" "$channel"; then
+        echo "Update failed. Zeroclaw remains at $old_ver."
+        return 1
+    fi
+    new_ver=$(vm_exec sh -c 'zeroclaw --version 2>/dev/null' || echo "unknown")
+    if [ "$old_ver" = "$new_ver" ]; then
+        echo "Already at latest version ($old_ver). No restart needed."
+        return 0
+    fi
+    echo "Updated: $old_ver → $new_ver. Restarting container..."
     podman restart "$CONTAINER_NAME"
     wait_for_ready
     wait_for_ssh_port
@@ -328,11 +339,10 @@ case "${1:-start}" in
     shell)   is_running || { echo "Container not running. Start it first."; exit 1; }; podman exec -it -u "$VM_USER" -w "/home/$VM_USER/.zeroclaw" "$CONTAINER_NAME" /bin/bash ;;
     destroy) destroy_container ;;
     rebuild) rebuild_image ;;
-    update)  update_zeroclaw ;;
-    upgrade) upgrade_zeroclaw ;;
+    update)  shift; update_zeroclaw "$@" ;;
     version) show_version ;;
     backup)  backup_container ;;
     restore) shift; restore_container "${1:?Usage: $0 restore <backup_file>}" ;;
     setup)   setup_host ;;
-    *)       echo "Usage: $0 {start|stop|restart|status|shell|destroy|rebuild|update|upgrade|version|backup|restore|setup|help}"; exit 1 ;;
+    *)       echo "Usage: $0 {start|stop|restart|status|shell|destroy|rebuild|update|version|backup|restore|setup|help}"; exit 1 ;;
 esac
