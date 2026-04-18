@@ -126,32 +126,66 @@ init_home_dir() {
 run_zeroclaw_installer() {
     local action="$1"
     local channel="${2:-stable}"
-    local api_url jq_filter
+    local api_url
     case "$channel" in
-        stable) api_url="https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases/latest"
-                jq_filter=".tarball_url" ;;
-        beta)   api_url="https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases"
-                jq_filter="[.[] | select(.draft==false)][0].tarball_url" ;;
+        stable) api_url="https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases/latest" ;;
+        beta)   api_url="https://api.github.com/repos/zeroclaw-labs/zeroclaw/releases" ;;
         *)      echo "Unknown channel: $channel (expected: stable|beta)"; return 1 ;;
     esac
     echo "${action} zeroclaw (channel: ${channel})..."
     vm_exec sh -lc '
         set -e
-        tmp_dir=/tmp/zeroclaw-install
-        archive=/tmp/zeroclaw-release.tar.gz
-        cleanup() { rm -rf "$tmp_dir" "$archive"; }
-        trap cleanup EXIT
-        cleanup
-        archive_url=$(curl -fsSL "'"$api_url"'" | jq -r '"'$jq_filter'"')
-        [ -n "$archive_url" ] && [ "$archive_url" != "null" ] \
-            || { echo "Could not resolve release tarball URL"; exit 1; }
-        curl -fsSL "$archive_url" -o "$archive"
-        mkdir -p "$tmp_dir"
-        tar -xzf "$archive" -C "$tmp_dir" --strip-components=1 --no-same-owner
-        cd "$tmp_dir"
-        ./install.sh --skip-onboard
-        /usr/local/bin/zeroclaw --version 2>/dev/null || echo "Installed"
-    '
+        channel="$1"
+        api_url="$2"
+        tmp=/tmp/zeroclaw-install
+        trap "rm -rf $tmp" EXIT
+        rm -rf "$tmp" && mkdir -p "$tmp"
+        cd "$tmp"
+
+        case "$(uname -m)" in
+            x86_64)  target=x86_64-unknown-linux-gnu ;;
+            aarch64) target=aarch64-unknown-linux-gnu ;;
+            *)       echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+        esac
+        asset="zeroclaw-${target}.tar.gz"
+
+        if [ "$channel" = "beta" ]; then
+            release=$(curl -fsSL "$api_url" | jq -c "[.[] | select(.draft==false)][0]")
+        else
+            release=$(curl -fsSL "$api_url" | jq -c ".")
+        fi
+        [ -n "$release" ] && [ "$release" != "null" ] \
+            || { echo "Failed to resolve release metadata" >&2; exit 1; }
+
+        tag=$(printf "%s" "$release" | jq -r ".tag_name")
+        asset_url=$(printf "%s" "$release" | jq -r --arg n "$asset" ".assets[] | select(.name==\$n) | .browser_download_url")
+        sums_url=$(printf "%s" "$release" | jq -r ".assets[] | select(.name==\"SHA256SUMS\") | .browser_download_url")
+        [ -n "$asset_url" ] && [ "$asset_url" != "null" ] \
+            || { echo "Asset $asset not found in release $tag" >&2; exit 1; }
+
+        echo "Resolved $tag ($asset)"
+        curl -fsSL "$asset_url" -o "$asset"
+        if [ -n "$sums_url" ] && [ "$sums_url" != "null" ]; then
+            curl -fsSL "$sums_url" -o SHA256SUMS
+            grep -qF "$asset" SHA256SUMS \
+                || { echo "Asset $asset not listed in SHA256SUMS" >&2; exit 1; }
+            sha256sum --ignore-missing -c SHA256SUMS
+        else
+            echo "Warning: SHA256SUMS asset missing, skipping checksum verification" >&2
+        fi
+
+        tar -xzf "$asset" --no-same-owner
+        bin=$(find . -maxdepth 3 -type f -name zeroclaw | head -n1)
+        [ -n "$bin" ] || { echo "zeroclaw binary not found in archive" >&2; exit 1; }
+        chmod +x "$bin"
+        "$bin" --version >/dev/null
+
+        dest=/home/user/.cargo/bin/zeroclaw
+        mkdir -p /home/user/.cargo/bin
+        install -m 0755 "$bin" "${dest}.new"
+        mv -f "${dest}.new" "$dest"
+        /usr/local/bin/zeroclaw --version
+    ' zeroclaw-install "$channel" "$api_url"
 }
 
 install_zeroclaw() {
